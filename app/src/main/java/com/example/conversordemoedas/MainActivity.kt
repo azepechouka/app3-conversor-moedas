@@ -2,7 +2,6 @@ package com.example.conversordemoedas
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.content.Intent
@@ -19,13 +18,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvDollarBalance: TextView
     private lateinit var tvBitcoinBalance: TextView
     private lateinit var btnConvert: Button
-
-    // Saldo inicial do usuário
     private var realBalance: BigDecimal = BigDecimal("100000.00")
     private var dollarBalance: BigDecimal = BigDecimal("50000.00")
     private var bitcoinBalance: BigDecimal = BigDecimal("0.5000")
-
-    // Formatos para exibição
     private val realFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     private val dollarFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale.US)
     private val bitcoinFormat: NumberFormat = NumberFormat.getNumberInstance(Locale.US).apply {
@@ -63,7 +58,6 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == CONVERTER_REQUEST_CODE && resultCode == RESULT_OK) {
-            // Atualizar saldos com os valores retornados da ConverterActivity
             data?.let {
                 realBalance = BigDecimal(it.getStringExtra("updatedRealBalance") ?: "0.00")
                 dollarBalance = BigDecimal(it.getStringExtra("updatedDollarBalance") ?: "0.00")

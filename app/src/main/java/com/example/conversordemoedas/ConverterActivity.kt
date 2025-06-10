@@ -11,20 +11,22 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputEditText
-import com.example.conversordemoedas.R
-import com.example.conversordemoedas.data.api.RetrofitClient
-import kotlinx.coroutines.CoroutineScope
+import com.example.conversordemoedas.data.api.AwesomeApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
-
+import com.example.conversordemoedas.data.model.cotacao
 class ConverterActivity : AppCompatActivity() {
 
     private lateinit var spinnerOriginCurrency: Spinner
+    private lateinit var awesomeApi : AwesomeApi
     private lateinit var spinnerDestCurrency: Spinner
     private lateinit var etAmount: TextInputEditText
     private lateinit var btnPerformConversion: Button
@@ -63,6 +65,12 @@ class ConverterActivity : AppCompatActivity() {
         btnPerformConversion.setOnClickListener {
             performConversion()
         }
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://economia.awesomeapi.com.br/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        awesomeApi = retrofit.create(AwesomeApi::class.java)
     }
 
     private fun setupSpinners() {
@@ -106,10 +114,8 @@ class ConverterActivity : AppCompatActivity() {
                 Toast.makeText(this, "Moedas de origem e destino são as mesmas.", Toast.LENGTH_SHORT).show()
                 return
             }
-            (selectedOriginCurrency == "USD" && selectedDestCurrency == "BRL") ||
-                    (selectedOriginCurrency == "BRL" && selectedDestCurrency == "USD") ->
-                "${selectedOriginCurrency}${selectedDestCurrency}"
-
+            selectedOriginCurrency == "BRL" && selectedDestCurrency == "USD" -> "BRL-USD"
+            selectedOriginCurrency == "USD" && selectedDestCurrency == "BRL" -> "USD-BRL"
             selectedOriginCurrency == "BTC" && selectedDestCurrency == "BRL" -> "BTC-USD"
             selectedOriginCurrency == "BTC" && selectedDestCurrency == "USD" -> "BTC-USD"
             selectedOriginCurrency == "BRL" && selectedDestCurrency == "BTC" -> "USD-BRL"
@@ -119,14 +125,14 @@ class ConverterActivity : AppCompatActivity() {
                 return
             }
         }
-
         progressBar.visibility = View.VISIBLE
         btnPerformConversion.isEnabled = false
 
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch {
             try {
-                val response = RetrofitClient.instance.getCurrencyQuote(coinPair)
-                withContext(Dispatchers.Main) {
+                val response = withContext(Dispatchers.Main) {
+                    awesomeApi.getCotacao(coinPair)
+                }
                     progressBar.visibility = View.GONE
                     btnPerformConversion.isEnabled = true
 
@@ -138,7 +144,7 @@ class ConverterActivity : AppCompatActivity() {
                             val bidPrice = BigDecimal(quoteEntry.bid)
                             val askPrice = BigDecimal(quoteEntry.ask)
 
-                            var convertedValue: BigDecimal
+                            lateinit var convertedValue: BigDecimal
                             var finalPrice: BigDecimal = BigDecimal.ZERO
                             when {
                                 (selectedOriginCurrency == "BRL" && selectedDestCurrency == "USD") -> {
@@ -161,7 +167,7 @@ class ConverterActivity : AppCompatActivity() {
                                     val usdPriceForBtc = BigDecimal(quoteEntry.ask)
                                     val amountInUsd = amount.multiply(usdPriceForBtc).setScale(2, BigDecimal.ROUND_HALF_UP)
 
-                                    val brlToUsdResponse = RetrofitClient.instance.getCurrencyQuote("USD-BRL")
+                                    val brlToUsdResponse = awesomeApi.getCotacao("USD-BRL")
                                     if (brlToUsdResponse.isSuccessful) {
                                         val brlToUsdQuotes = brlToUsdResponse.body()
                                         val brlToUsdQuoteEntry = brlToUsdQuotes?.values?.firstOrNull()
@@ -170,23 +176,21 @@ class ConverterActivity : AppCompatActivity() {
                                             convertedValue = amountInUsd.multiply(bidUsdToBrl).setScale(2, BigDecimal.ROUND_HALF_UP)
                                         } else {
                                             Toast.makeText(this@ConverterActivity, "Erro ao obter cotação USD-BRL para conversão intermediária.", Toast.LENGTH_SHORT).show()
-                                            return
                                         }
                                     } else {
                                         Toast.makeText(this@ConverterActivity, "Erro na chamada da API para USD-BRL: ${brlToUsdResponse.code()}", Toast.LENGTH_SHORT).show()
-                                        return
                                     }
                                 }
                                 (selectedOriginCurrency == "BRL" && selectedDestCurrency == "BTC") -> {
                                     // BRL -> USD
-                                    val usdToBrlResponse = RetrofitClient.instance.getCurrencyQuote("BRL-USD")
+                                    val usdToBrlResponse = awesomeApi.getCotacao("BRL-USD")
                                     if (usdToBrlResponse.isSuccessful) {
                                         val usdToBrlQuotes = usdToBrlResponse.body()
                                         val usdToBrlQuoteEntry = usdToBrlQuotes?.values?.firstOrNull()
                                         if (usdToBrlQuoteEntry != null) {
                                             val askBrlToUsd = BigDecimal(usdToBrlQuoteEntry.bid)
                                             val amountInUsd = amount.divide(askBrlToUsd, 2, BigDecimal.ROUND_HALF_UP)
-                                            val btcToUsdResponse = RetrofitClient.instance.getCurrencyQuote("USD-BTC")  dá BTC-USD
+                                            val btcToUsdResponse = awesomeApi.getCotacao("USD-BTC")
                                             if (btcToUsdResponse.isSuccessful) {
                                                 val btcToUsdQuotes = btcToUsdResponse.body()
                                                 val btcToUsdQuoteEntry = btcToUsdQuotes?.values?.firstOrNull()
@@ -195,24 +199,19 @@ class ConverterActivity : AppCompatActivity() {
                                                     convertedValue = amountInUsd.divide(bidUsdToBtc, 4, BigDecimal.ROUND_HALF_UP)
                                                 } else {
                                                     Toast.makeText(this@ConverterActivity, "Erro ao obter cotação USD-BTC para conversão intermediária.", Toast.LENGTH_SHORT).show()
-                                                    return
                                                 }
                                             } else {
                                                 Toast.makeText(this@ConverterActivity, "Erro na chamada da API para USD-BTC: ${btcToUsdResponse.code()}", Toast.LENGTH_SHORT).show()
-                                                return
                                             }
                                         } else {
                                             Toast.makeText(this@ConverterActivity, "Erro ao obter cotação BRL-USD para conversão intermediária.", Toast.LENGTH_SHORT).show()
-                                            return
                                         }
                                     } else {
                                         Toast.makeText(this@ConverterActivity, "Erro na chamada da API para BRL-USD: ${usdToBrlResponse.code()}", Toast.LENGTH_SHORT).show()
-                                        return
                                     }
                                 }
                                 else -> {
                                     Toast.makeText(this@ConverterActivity, "Combinação de moedas não esperada.", Toast.LENGTH_SHORT).show()
-                                    return
                                 }
                             }
                             updateBalancesAfterConversion(selectedOriginCurrency, selectedDestCurrency, amount, convertedValue)
@@ -237,7 +236,6 @@ class ConverterActivity : AppCompatActivity() {
                     } else {
                         Toast.makeText(this@ConverterActivity, "Erro na chamada da API: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
-                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     progressBar.visibility = View.GONE
@@ -289,3 +287,4 @@ class ConverterActivity : AppCompatActivity() {
         super.onBackPressed()
     }
 }
+

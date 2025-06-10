@@ -8,6 +8,6 @@ import retrofit2.http.Path
 interface AwesomeApi {
 
     @GET("json/last/{coinPair}")
-    suspend fun getcotacao(@Path("coinPair") coinPair: String):
+    suspend fun getCotacao(@Path("coinPair") coinPair: String):
             Response<Map<String, cotacao>>
 }
